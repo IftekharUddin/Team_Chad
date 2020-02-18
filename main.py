@@ -5,48 +5,85 @@ from pybricks.ev3devices import (Motor, TouchSensor, ColorSensor,
 from pybricks.parameters import (Port, Stop, Direction, Button, Color,
                                  SoundFile, ImageFile, Align)
 from pybricks.tools import print, wait, StopWatch
-from pybricks.robotics import DriveBase
 
-# Write your program here
-brick.sound.beep()
+import math 
 
-# Initialize the ULtrasonic Sensor. It is used to detect obstacles as the robot drives around
-obstacle_sensor = UltrasonicSensor(Port.S4)
-
-# Initialize two motors with default settings on Port B and Port C
-# These will be the left and right motors of the drive base.
+# set sensors
+bump_sensor = TouchSensor(Port.S1)
 left_motor = Motor(Port.B)
 right_motor = Motor(Port.C)
+distanceSensor = UltrasonicSensor(Port.S4)
 
-# The wheel diameter of the robot EDucator is 56 milimeters
-wheel_diameter = 56
+def main():
+    # The wheel diameter of the robot EDucator is 56 milimeters
+    wheel_diameter = 56
 
-# The axle track is the distance between the centers of each of th ewheels.
-# For the Robot Educator this is 114 milimeters
-axle_track = 114
+    # The axle track is the distance between the centers of each of th ewheels.
+    # For the Robot Educator this is 114 milimeters
+    axle_track = 114
 
-# The DriveBase is composed of two motors, with a wheel on each motor.
-# The wheel_diameter and axle_track values are used to make the motors
-# move at the correct speed when you give a motor command.
-robot = DriveBase(left_motor, right_motor, wheel_diameter, axle_track)
+    #const for number of rotations to travel 1.2 m
+    NUM_ROTATIONS = (1.2*1000)/(math.pi * wheel_diameter)
+    rotationString = str(NUM_ROTATIONS)
+    brick.display.clear()
+    brick.display.text(rotationString, (60, 50))
 
-# The following loop makes the robot drive forward until it detects an
-# obstacle. Then it backs up and turns around. It keeps on doing this
-# until you stop the program.
-while True:
-    #Begin driving forward at 200 milimeters per second
-    robot.drive(200,0)
+    # Objective 1
+    wait_for_buttonpress()
+    drive_robot_for_distance(NUM_ROTATIONS, NUM_ROTATIONS) 
 
-    # Wait until an obstacle is detected. This is done by repeatedly
-    # doing nothing (waiting for 10 miliseconds) while the measured
-    # distance is still greater than 300 mm.
-    while obstacle_sensor.distance() > 300:
+    # Objective 2
+    wait_for_buttonpress()
+    ultrasonic_test()
+
+    # Objective 3
+    wait_for_buttonpress()
+    bump_wall()
+    
+# beep and then wait until button is pressed
+def wait_for_buttonpress():
+    brick.sound.beep()
+    while not any(brick.buttons()):
         wait(10)
 
-    # Drive backward at 100 milimeters per second. Keep going for 2 seconds.
-    robot.drive_time(-100, 0, 2000)
+def drive_robot_forward():
+    right_motor.run(150)
+    left_motor.run(150)
 
-    # Turn around at 60 degrees per second, around the midpoint between
-    # the wheels. Keep going for 2 seconds.
-    robot.drive_time(0, 60, 2000)
+def drive_robot_backward():
+    right_motor.run(-150)
+    left_motor.run(-150)
 
+def stop_robot():
+    right_motor.stop(Stop.HOLD)
+    left_motor.stop(Stop.HOLD)
+
+# go forward 1.2m
+# then stop
+def drive_robot_for_distance(rightRotations, leftRotations):
+    right_motor.run_target(150, 360*leftRotations, Stop.HOLD, False)
+    left_motor.run_target(150, 360*rightRotations, Stop.HOLD, True)
+
+# go forward until 50cm away from the wall infront of you
+# then stop
+def ultrasonic_test():
+    drive_robot_forward()
+    while(distanceSensor.distance() > 500):
+        wait(10)
+    
+    stop_robot()
+
+# go forward until bump sensor is hit
+# then back up until 50cm away from the wall
+def bump_wall():
+    drive_robot_forward()
+    while not bump_sensor.pressed():
+        pass
+    stop_robot()
+
+    drive_robot_backward()
+    while(distanceSensor.distance() < 500):
+        drive_robot_forward()
+    stop_robot()
+    
+main()
