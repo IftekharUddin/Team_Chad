@@ -1,12 +1,15 @@
 #!/usr/bin/env pybricks-micropython
 from pybricks import ev3brick as brick
-from pybricks.ev3devices import (Motor, TouchSensor, ColorSensor,
-                                 InfraredSensor, UltrasonicSensor, GyroSensor)
+from pybricks.ev3devices import (Motor, TouchSensor, ColorSensor, InfraredSensor, UltrasonicSensor, GyroSensor)
 from pybricks.parameters import (Port, Stop, Direction, Button, Color,
                                  SoundFile, ImageFile, Align)
 from pybricks.tools import print, wait, StopWatch
 
+from state import State
 import math 
+
+
+initialized = false
 
 # set sensors
 bump_sensor = TouchSensor(Port.S1)
@@ -14,13 +17,54 @@ left_motor = Motor(Port.B)
 right_motor = Motor(Port.C)
 distanceSensor = UltrasonicSensor(Port.S4)
 
-def main():
-    # The wheel diameter of the robot EDucator is 56 milimeters
-    wheel_diameter = 56
+#we will measure time in SECONDS to match angular velocity, which is degress/sec
+watch = StopWatch()
 
-    # The axle track is the distance between the centers of each of th ewheels.
-    # For the Robot Educator this is 114 milimeters
-    axle_track = 114
+# The wheel diameter of the robot EDucator is 56 milimeters
+wheel_diameter = 56
+
+# The axle track is the distance between the centers of each of th ewheels.
+# For the Robot Educator this is 114 milimeters
+axle_track = 114
+
+currState = State.MOVE_TO_WALL
+
+
+def loop():
+    while currState != State.END:
+        if (initialized):
+            if currState == State.MOVE_TO_WALL:
+                right_motor.run(90)
+                left_motor.run(-90)
+            elif currState == State.TURN_RIGHT:
+                break
+            elif currState == State.TRACK_WALL:
+                break
+            elif currState == State.TURN_LEFT:
+                break
+            elif currState == State.MOVE_TO_GOAL:
+                break
+
+            #DEAD RECKONING CALCULATIONS
+            #integrate (vr-vl)/L by summation and multiplying by change in time
+            vr = right_motor.speed()
+            vl = left_motor.speed()
+
+            newTime = watch.time()/1000
+            dt = newTime - currTime
+
+            heading = heading + (vr - vl)*(dt/axle_track)
+            print(str(heading))
+
+            currTime = newTime
+        else: #initialize program by creating start time and setting angular heading to 0 degrees
+            currTime = watch.time()/1000
+            heading = 0
+
+            initialized = true
+        
+
+def main():
 
     #const for number of rotations to travel 1.2 m
     NUM_ROTATIONS = (1.2*1000)/(math.pi * wheel_diameter)
@@ -86,4 +130,4 @@ def bump_wall():
         drive_robot_forward()
     stop_robot()
     
-main()
+loop()
