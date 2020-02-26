@@ -9,9 +9,11 @@ from pybricks.tools import print, wait, StopWatch
 
 import math 
 
+# set ENUMS
 MOVE_TO_WALL=1
 TURN_RIGHT=2
 TRACK_WALL=3
+TURN_AWAY_FROM_WALL = 8
 TURN_LEFT=4
 MOVE_TO_GOAL=5
 BACK_UP=7
@@ -35,14 +37,19 @@ wheel_radius = wheel_diameter/2
 # For the Robot Educator this is 114 milimeters
 axle_track = 114/1000
 
+# set initial state
 currState = MOVE_TO_WALL
 
+# counter to indicate when robot has passed the wall
 wall_counter = 0
+stall_counter = 0
 
 init = False
 back_init = False
 final_init = False
+turn_away_init = False
 
+# temp variable to check delta distance
 last_distance = 0
 
 def loop():
@@ -63,11 +70,14 @@ def loop():
                     currState = BACK_UP
 
             elif currState == BACK_UP:
+                # start going backward
                 if not back_init:
                     startTime = watch.time()
                     drive_robot_at_angular_speed(-100)
                     back_init = True
-                elif (watch.time() - startTime) > 1000:
+
+                # go backward for one second
+                elif (watch.time() - startTime) > 1500:
                     stop_robot()
                     currState = TURN_RIGHT
 
@@ -79,8 +89,15 @@ def loop():
             # Objective 3: Go forward until the wall to the left is gone.
             # Objective 4: Go forward for x amount of distance to clear the wall
             elif currState == TRACK_WALL:
+                if bump_sensor.pressed():
+                    turn_away_init = False
+                    currState = TURN_AWAY_FROM_WALL
                 if tracked_wall():
                     currState = TURN_LEFT
+
+            elif currState == TURN_AWAY_FROM_WALL:
+                if turn_from_wall(5000):
+                    currState = TRACK_WALL
 
             # Objective 5: Turn to the left 90 degrees
             elif currState == TURN_LEFT:
@@ -93,7 +110,7 @@ def loop():
                     right_motor.reset_angle(0)
                     left_motor.reset_angle(0)
                     final_init = True
-                if drive_robot_for_distance(.85, 150):
+                if drive_robot_for_distance(.80, 150):
                     currState = END
             elif currState == END:
                 stop_robot()
@@ -107,13 +124,38 @@ def loop():
             newTime = watch.time()/1000
             dt = newTime - currTime
 
-            # print(str(heading))
+            print(str(heading))
             heading = heading + (vr - vl)*.9*(dt/axle_track)
 
             currTime = newTime
         
 
+# robot pivots on left wheel so the button isn't pressed anymore
+def turn_from_wall(time):
+    global turn_away_init
+    global turn_away_start_time
+
+    # start stopwatch of state
+    if not turn_away_init:
+        turn_away_start_time = watch.time()
+        turn_away_init = True
+
+    # stop after "time" miliseconds
+    if watch.time() - turn_away_start_time > time:
+        print("DONE")
+        stop_robot()
+        return True
     
+    # set left motor to 0 and right motor to x
+    left_motor.run(0)
+    right_motor.run(-70)
+    print("TURNING AWAY")
+    return False
+    
+
+
+    
+# turn right by adding 90 to the heading (turning right is negative) and multiplying that error by the constant kp
 def turned_right(heading):
     error = abs(-90 - heading)
     kp = 5
@@ -121,12 +163,14 @@ def turned_right(heading):
     right_motor.run(-kp*error)
     left_motor.run(kp*error)
 
+    # stop turning when the heading is within 8mm of our target heading
     if abs(heading+90) < 8:
         return True
     else:
         return False
     
 
+# turn left using PID for the total angle we've accumulated (heading)
 def turned_left(heading):
     error = abs(heading)
     kp = 4
@@ -134,56 +178,79 @@ def turned_left(heading):
     right_motor.run(15+kp*error)
     left_motor.run(-(15+kp*error))
 
-    if abs(heading) < 2:
+    # stop if within 3.5 of our heading
+    if abs(heading) < 3.5:
         return True
     else:
         return False
 
 def tracked_wall():
-    kp = 130 
+    brick.light(Color.GREEN)
     global wall_counter
     global last_distance 
+    kp = 1000 
 
+    # set distance to seconds
     distance = distanceSensor.distance()/1000
 
-    dampener = 1
-    if wall_counter >= 125:
+    # print(str(distance))
+    # set stall counter
+    global stall_counter
+
+    # print(stall_counter)
+    # registered that the robot has passed the wall.
+    # used because the bad sensor sometimes registered incorrect high values
+    if wall_counter >= 85:
         return True
 
-    if not last_distance == 0 and abs(distance - last_distance) > .05:
-        print("CHANGED")
-        stop_robot()
-        wait(1000)
-        last_distance = distance
+    # if stalled, move back slightly 
+    if stall_counter > 0:
+        brick.light(Color.RED)
+        right_motor.run(45)
+        left_motor.run(45)
+        stall_counter -= 1
         return False
 
-    if distance >= .5:
-        dampener = .7
+    # if too far from wall, turn left SHARP
+    if distance >= 1:
         wall_counter += 1
         left_motor.run(110)
-        right_motor.run(90)
-        print("ERROR" + str(distance))
+        right_motor.run(70)
+        # print("ERROR" + str(distance))
         last_distance = distance
         return False
     else: 
         wall_counter = 0
 
+    # stall and double check if the sudden change in distance is reading correctly
+    if not last_distance == 0 and abs(distance - last_distance) > .05:
+        # print("CHANGED")
+        stop_robot()
+        wait(100)
+        last_distance = distance
+        stall_counter = 15
+        return False
 
-    speed = 150 * dampener
-    error = .20 - distance
 
+    # set normal speed and error distance
+    speed = 150 
+    error = .17 - distance
+
+    # too far, turn left normal
     if error > .05:
         left_motor.run(speed)
         right_motor.run(speed/2)
+    # too close, turn right normal
     elif error < -.05:
         left_motor.run(speed/2)
         right_motor.run(speed)
+    # just right, turn right/left proportional to the error. (PID)
     else:
         right_motor.run(speed - kp*error)
         left_motor.run(speed + kp*error)
 
     # print(str(distance))
-    print(str(last_distance))
+    # print(str(last_distance))
 
     last_distance = distance
     # turn = 25
@@ -197,7 +264,6 @@ def tracked_wall():
     
 
     # print(str(speed-kp*error) + " " + str(speed+kp*error))
-    # print(str(distance))
 
     return False
 
@@ -285,4 +351,5 @@ def drive_until_bumped_then_retreat(distance):
     stop_robot()
     return True
     
+wait_for_buttonpress()
 loop()
