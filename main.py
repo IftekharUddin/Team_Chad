@@ -110,7 +110,7 @@ def loop():
                     right_motor.reset_angle(0)
                     left_motor.reset_angle(0)
                     final_init = True
-                if drive_robot_for_distance(.80, 150):
+                if drive_robot_for_distance(.90, 150):
                     currState = END
             elif currState == END:
                 stop_robot()
@@ -212,7 +212,7 @@ def tracked_wall():
         return False
 
     # if too far from wall, turn left SHARP
-    if distance >= 1:
+    if distance >= .7:
         wall_counter += 1
         left_motor.run(110)
         right_motor.run(70)
