@@ -43,6 +43,8 @@ init = False
 back_init = False
 final_init = False
 
+last_distance = 0
+
 def loop():
     global wall_counter
     global init 
@@ -91,7 +93,7 @@ def loop():
                     right_motor.reset_angle(0)
                     left_motor.reset_angle(0)
                     final_init = True
-                if drive_robot_for_distance(.75, 150):
+                if drive_robot_for_distance(.85, 150):
                     currState = END
             elif currState == END:
                 stop_robot()
@@ -105,7 +107,7 @@ def loop():
             newTime = watch.time()/1000
             dt = newTime - currTime
 
-            print(str(heading))
+            # print(str(heading))
             heading = heading + (vr - vl)*.9*(dt/axle_track)
 
             currTime = newTime
@@ -140,6 +142,7 @@ def turned_left(heading):
 def tracked_wall():
     kp = 130 
     global wall_counter
+    global last_distance 
 
     distance = distanceSensor.distance()/1000
 
@@ -147,30 +150,42 @@ def tracked_wall():
     if wall_counter >= 125:
         return True
 
-    if distance >= .3:
+    if not last_distance == 0 and abs(distance - last_distance) > .05:
+        print("CHANGED")
+        stop_robot()
+        wait(1000)
+        last_distance = distance
+        return False
+
+    if distance >= .5:
         dampener = .7
         wall_counter += 1
-        left_motor.run(100)
-        right_motor.run(100)
+        left_motor.run(110)
+        right_motor.run(90)
+        print("ERROR" + str(distance))
+        last_distance = distance
         return False
     else: 
         wall_counter = 0
 
 
-    speed = 200 * dampener
-    error = .19 - distance
+    speed = 150 * dampener
+    error = .20 - distance
 
     if error > .05:
         left_motor.run(speed)
         right_motor.run(speed/2)
-    elif error < .05:
+    elif error < -.05:
         left_motor.run(speed/2)
         right_motor.run(speed)
     else:
         right_motor.run(speed - kp*error)
         left_motor.run(speed + kp*error)
 
+    # print(str(distance))
+    print(str(last_distance))
 
+    last_distance = distance
     # turn = 25
     # speed = 200
     # if distance > .2:
@@ -250,7 +265,7 @@ def ultrasonic_sense_for_distance(distance):
 # then back up until 50cm away from the wall
 def drive_until_bumped():
     if not bump_sensor.pressed():
-        drive_robot_at_angular_speed(125)
+        drive_robot_at_angular_speed(200)
         return False
     stop_robot()
     print(str("bumped"))
